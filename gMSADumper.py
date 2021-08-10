@@ -86,7 +86,9 @@ def main():
                 print('Users or groups who can read password for '+sam+':')
                 for dacl in SR_SECURITY_DESCRIPTOR(data=entry['msDS-GroupMSAMembership'].raw_values[0])['Dacl']['Data']:
                     conn.search(base_creator(args.domain), '(&(objectSID='+dacl['Ace']['Sid'].formatCanonical()+'))', attributes=['sAMAccountName'])
-                    print(' > ' + conn.entries[0]['sAMAccountName'].value)
+                    # Added this check to prevent an error from occuring when there are no results returned
+                    if len(conn.entries) != 0:
+                        print(' > ' + conn.entries[0]['sAMAccountName'].value)
                 if entry['msDS-ManagedPassword']:
                     data = entry['msDS-ManagedPassword'].raw_values[0]
                     blob = MSDS_MANAGEDPASSWORD_BLOB()
