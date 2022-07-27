@@ -113,9 +113,6 @@ def main():
                     passwd = hexlify(ntlm_hash.digest()).decode("utf-8")
                     userpass = sam + ':::' + passwd
                     print(userpass)
-    else:
-        print('LDAP query failed.')
-        print(success)
 
                     # Compute aes keys
                     password = currentPassword.decode('utf-16-le', 'replace').encode('utf-8')
@@ -124,6 +121,9 @@ def main():
                     aes_256_hash = hexlify(string_to_key(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value, password, salt).contents)
                     print('%s:aes256-cts-hmac-sha1-96:%s' % (sam, aes_256_hash.decode('utf-8')))
                     print('%s:aes128-cts-hmac-sha1-96:%s' % (sam, aes_128_hash.decode('utf-8')))
+    else:
+        print('LDAP query failed.')
+        print(success)
 
 if __name__ == "__main__":
     main()
