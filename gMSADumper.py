@@ -120,7 +120,7 @@ def main():
 
                     # Compute aes keys
                     password = currentPassword.decode('utf-16-le', 'replace').encode('utf-8')
-                    salt = '%shost%s.%s' % (args.domain.upper(), sam[:-1], args.domain.lower())
+                    salt = '%shost%s.%s' % (args.domain.upper(), sam[:-1].lower(), args.domain.lower())
                     aes_128_hash = hexlify(string_to_key(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value, password, salt).contents)
                     aes_256_hash = hexlify(string_to_key(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value, password, salt).contents)
                     print('%s:aes256-cts-hmac-sha1-96:%s' % (sam, aes_256_hash.decode('utf-8')))
