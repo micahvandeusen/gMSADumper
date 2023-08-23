@@ -15,6 +15,7 @@ parser.add_argument('-p','--password', help='password for LDAP (or LM:NT hash)',
 parser.add_argument('-k','--kerberos', help='use kerberos authentication',required=False, action='store_true')
 parser.add_argument('-l','--ldapserver', help='LDAP server (or domain)', required=False)
 parser.add_argument('-d','--domain', help='Domain', required=True)
+parser.add_argument('-t','--target', help='Target a specific single gMSA account (default: ALL)', required=False, action="store")
 
 class MSDS_MANAGEDPASSWORD_BLOB(Structure):
     structure = (
@@ -87,10 +88,15 @@ def main():
     except:
         print('Unable to start a TLS connection. Is LDAPS enabled? Only ACLs will be listed and not ms-DS-ManagedPassword.\n')
 
+    ldap_query = "(&(ObjectClass=msDS-GroupManagedServiceAccount)"
+    if args.target is not None:
+        ldap_query += "(cn="+args.target.strip('$')+")"
+    ldap_query += ")"
+    
     if ldaps:
-        success = conn.search(base_creator(args.domain), '(&(ObjectClass=msDS-GroupManagedServiceAccount))', search_scope=SUBTREE, attributes=['sAMAccountName','msDS-ManagedPassword','msDS-GroupMSAMembership'])
+        success = conn.search(base_creator(args.domain), ldap_query, search_scope=SUBTREE, attributes=['sAMAccountName','msDS-ManagedPassword','msDS-GroupMSAMembership'])
     else:
-        success = conn.search(base_creator(args.domain), '(&(ObjectClass=msDS-GroupManagedServiceAccount))', search_scope=SUBTREE, attributes=['sAMAccountName','msDS-GroupMSAMembership'])
+        success = conn.search(base_creator(args.domain), ldap_query, search_scope=SUBTREE, attributes=['sAMAccountName','msDS-GroupMSAMembership'])
     
     if success:
         if len(conn.entries) == 0:
